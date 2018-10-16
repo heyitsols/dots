@@ -69,7 +69,7 @@ function git_branch {
 
   if [[ $git_status =~ $on_branch ]]; then
     local branch=${BASH_REMATCH[1]}
-    echo -n "($branch)"
+    echo -n "($branch|$(git branch -vv | grep "*" | awk '{print $4}' | tr -d '[]'))"
   elif [[ $git_status =~ $on_commit ]]; then
     local commit=${BASH_REMATCH[1]}
     echo -n "($commit)"
@@ -80,15 +80,16 @@ if [ "$PRESENTING_MODE" = "true" ]; then
 	PS1="\W ols $ "
 	export PS1
 else
-	PS1="\[$COLOUR_WHITE\]\w "          # basename of pwd
-	PS1+="\[\$(git_color)\]"        # colors git status
-	PS1+="\$(git_branch) "           # prints current branch
-	PS1+="\n\A \[$COLOUR_BLUE\]\$\[$COLOUR_RESET\] "   # '#' for root, else '$'
+	PS1="\n\A \$(sshow)\$(sanity_check)\n" 
+	PS1+="\[$COLOUR_WHITE\]\w "
+	PS1+="\[\$(git_color)\]"
+	PS1+="\$(git_branch) "
+	PS1+="\n\[$COLOUR_BLUE\]\$\[$COLOUR_RESET\] "
 	export PS1
 fi
 alias gco="git checkout"
 alias gcb="git checkout -b"
-alias gpsup="git push --set-upstream origin $(git_branch | tr -d '()')"
+alias gpsup="git push --set-upstream origin $(git_branch | tr -d '()' | awk '{print $1}')"
 alias gitper="echo -n 'Was ' && git config user.email && git config user.signingkey && git config --global user.email 'oliver@leaversmith.com' && git config --global user.signingkey 16503BFB && echo -n 'Now ' && git config user.email && git config user.signingkey"
 
 #### Path things
@@ -102,10 +103,44 @@ alias d="friendlycd"
 alias tabred='echo -en "\033]6;1;bg;*;default\a\033]6;1;bg;red;brightness;255\a"'
 alias tabgreen='echo -en "\033]6;1;bg;*;default\a\033]6;1;bg;green;brightness;255\a"'
 alias tabreset='echo -en "\033]6;1;bg;*;default\a"'
+alias sshow='ps aux | grep [s]potify > /dev/null && spotify show'
 
 #### General functions
 function g(){
 	grep -rin --color=auto --exclude-dir='.git' --exclude-dir='.kitchen' "$@"
+}
+
+function context(){
+	line_number=$1
+	file=$2
+	lines_in_file=$(wc -l $file | awk '{print $1}')
+	start_line=$(($line_number-3))
+	finish_line=$(($line_number+3))
+	if [ $start_line -lt 1 ]; then
+		start_line=1
+	fi
+	if [ $finish_line -gt $lines_in_file ]; then
+		finish_line=$lines_in_file
+	fi
+	sed "$start_line,$finish_line!d" $file
+}
+
+function weather(){
+	city=$1
+	weather=$(curl -s wttr.in/${city}?0QT | sed '1!d' | grep -Eo '[a-zA-Z]+' | tr '\n' ' ')
+	temperature=$(curl -s wttr.in/${city}?0QT | sed '2!d' | grep -Eo '[0-9]+ | head -1')
+	echo "The weather today in $city is $weather. The temperature is $temperature degrees"
+}
+
+function wa(){
+	query=$@
+	curl -dL 'http://api.wolframalpha.com/v1/result' --data-urlencode "appid=${WA_API_KEY}" --data-urlencode "i=$query"
+}
+
+function sanity_check(){
+	if [ $(date "+%H") -gt 15 ]; then
+		echo -e "${COLOUR_RED}GO HOME"
+	fi
 }
 
 function friendlycd(){
@@ -160,3 +195,5 @@ else
 	NC='\033[0m'
 	echo -e "${YELLOW}Is the Internet on fire?${RED} $RESPONSE${NC}\n"
 fi
+
+export WA_API_KEY=redacted
